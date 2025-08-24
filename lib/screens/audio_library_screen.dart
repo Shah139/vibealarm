@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import '../services/tts_service.dart';
 import '../models/audio_file.dart';
 import '../services/audio_player_service.dart';
@@ -11,17 +12,81 @@ class AudioLibraryScreen extends StatefulWidget {
 }
 
 class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
-  bool _isGridView = true;
+  // bool _isGridView = true; // Removed - always use list view
   bool _isLoading = true;
   List<AudioFile> _audioFiles = [];
   final AudioPlayerService _audioPlayer = AudioPlayerService();
   final TTSService _ttsService = TTSService();
+  
+  // Audio player state
+  bool _isPlaying = false;
+  AudioFile? _currentlyPlaying;
+  double _volume = 1.0;
+  Duration _currentPosition = Duration.zero;
+  Duration _totalDuration = Duration.zero;
 
   @override
   void initState() {
     super.initState();
     _loadAudioFiles();
-    _audioPlayer.initialize();
+    _initializeAudioPlayer();
+  }
+
+  Future<void> _initializeAudioPlayer() async {
+    try {
+      await _audioPlayer.initialize();
+      
+      // Listen to player state changes
+      _audioPlayer.playingStream.listen((playing) {
+        if (mounted) {
+          setState(() {
+            _isPlaying = playing;
+          });
+        }
+      });
+
+      // Listen to position changes
+      _audioPlayer.positionStream.listen((position) {
+        if (mounted) {
+          setState(() {
+            _currentPosition = position;
+          });
+        }
+      });
+
+      // Listen to duration changes
+      _audioPlayer.durationStream.listen((duration) {
+        if (mounted && duration != null) {
+          setState(() {
+            _totalDuration = duration;
+          });
+        }
+      });
+
+      // Listen to player state changes
+      _audioPlayer.playerStateStream.listen((state) {
+        if (mounted) {
+          setState(() {
+            if (state.processingState.toString().contains('completed')) {
+              _isPlaying = false;
+              _currentlyPlaying = null;
+            }
+          });
+        }
+      });
+
+      print('Audio player initialized successfully');
+    } catch (e) {
+      print('Failed to initialize audio player: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to initialize audio player: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -37,17 +102,50 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
 
     try {
       final allAudio = await _ttsService.getAllAudioFiles();
+      
+      // Validate audio files
+      final validAudioFiles = <AudioFile>[];
+      for (final audio in allAudio) {
+        try {
+          if (audio.localPath.isNotEmpty) {
+            final file = File(audio.localPath);
+            if (await file.exists()) {
+              final fileSize = await file.length();
+              if (fileSize > 0) {
+                validAudioFiles.add(audio);
+                print('Valid audio: ${audio.name} - ${audio.localPath} - ${fileSize} bytes');
+              } else {
+                print('Invalid audio (0 bytes): ${audio.name} - ${audio.localPath}');
+              }
+            } else {
+              print('Audio file not found: ${audio.name} - ${audio.localPath}');
+            }
+          } else {
+            print('Audio file with empty path: ${audio.name}');
+          }
+        } catch (e) {
+          print('Error validating audio file ${audio.name}: $e');
+        }
+      }
+      
+      print('Loaded ${validAudioFiles.length} valid audio files out of ${allAudio.length} total');
+      
       setState(() {
-        _audioFiles = allAudio;
+        _audioFiles = validAudioFiles;
         _isLoading = false;
       });
     } catch (e) {
+      print('Error loading audio files: $e');
       setState(() {
         _isLoading = false;
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load audio files: $e')),
+          SnackBar(
+            content: Text('Failed to load audio files: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     }
@@ -55,11 +153,57 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
 
   Future<void> _playAudio(AudioFile audioFile) async {
     try {
-      await _audioPlayer.previewAudio(audioFile);
+      // Validate audio file
+      if (audioFile.localPath.isEmpty) {
+        throw Exception('Audio file path is empty');
+      }
+
+      // Check if file exists
+      final file = File(audioFile.localPath);
+      if (!await file.exists()) {
+        throw Exception('Audio file not found: ${audioFile.localPath}');
+      }
+
+      // Check file size
+      final fileSize = await file.length();
+      if (fileSize == 0) {
+        throw Exception('Audio file is empty (0 bytes)');
+      }
+
+      print('Playing audio: ${audioFile.name}');
+      print('File path: ${audioFile.localPath}');
+      print('File size: $fileSize bytes');
+
+      // Stop current playback if different audio
+      if (_currentlyPlaying != audioFile) {
+        await _audioPlayer.stop();
+        _currentlyPlaying = audioFile;
+      }
+
+      // Play the audio
+      if (_isPlaying && _currentlyPlaying == audioFile) {
+        // If same audio is playing, pause it
+        await _audioPlayer.pause();
+        setState(() {
+          _isPlaying = false;
+        });
+      } else {
+        // Play the audio
+        await _audioPlayer.playAudio(audioFile);
+        setState(() {
+          _isPlaying = true;
+          _currentlyPlaying = audioFile;
+        });
+      }
     } catch (e) {
+      print('Error playing audio: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to play audio: $e')),
+          SnackBar(
+            content: Text('Failed to play audio: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     }
@@ -110,38 +254,120 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(audioFile.name ?? 'Audio Details'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildDetailRow('Text', audioFile.text ?? 'N/A'),
-              _buildDetailRow('Mood', audioFile.mood),
-              _buildDetailRow('Voice', audioFile.voiceName ?? 'Default'),
-              _buildDetailRow('Language', audioFile.languageCode ?? 'en-US'),
-              if (audioFile.duration != null)
-                _buildDetailRow('Duration', '${audioFile.duration}s'),
-              if (audioFile.fileSize != null)
-                _buildDetailRow('File Size', audioFile.fileSize!),
-              _buildDetailRow('Created', _formatDate(audioFile.createdAt)),
-              _buildDetailRow('Type', audioFile.isGenerated ? 'Generated' : 'Pre-installed'),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
-            ),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _playAudio(audioFile);
-              },
-              icon: const Icon(Icons.play_arrow),
-              label: const Text('Play'),
-            ),
-          ],
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(audioFile.name ?? 'Audio Details'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildDetailRow('Text', audioFile.text ?? 'N/A'),
+                  _buildDetailRow('Mood', audioFile.mood),
+                  _buildDetailRow('Voice', audioFile.voiceName ?? 'Default'),
+                  _buildDetailRow('Language', audioFile.languageCode ?? 'en-US'),
+                  if (audioFile.duration != null)
+                    _buildDetailRow('Duration', '${audioFile.duration}s'),
+                  if (audioFile.fileSize != null)
+                    _buildDetailRow('File Size', audioFile.fileSize!),
+                  _buildDetailRow('Created', _formatDate(audioFile.createdAt)),
+                  _buildDetailRow('Type', audioFile.isGenerated ? 'Generated' : 'Pre-installed'),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Volume control
+                  Row(
+                    children: [
+                      const Icon(Icons.volume_down, size: 20),
+                      Expanded(
+                        child: Slider(
+                          value: _volume,
+                          min: 0.0,
+                          max: 1.0,
+                          divisions: 10,
+                          onChanged: (value) {
+                            setDialogState(() {
+                              _volume = value;
+                            });
+                            _audioPlayer.setVolume(value);
+                          },
+                        ),
+                      ),
+                      const Icon(Icons.volume_up, size: 20),
+                      Text('${(_volume * 100).round()}%'),
+                    ],
+                  ),
+                  
+                  // Audio controls
+                  if (_currentlyPlaying == audioFile) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        IconButton(
+                          onPressed: () async {
+                            if (_isPlaying) {
+                              await _audioPlayer.pause();
+                            } else {
+                              await _audioPlayer.resume();
+                            }
+                            setDialogState(() {});
+                          },
+                          icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+                          tooltip: _isPlaying ? 'Pause' : 'Resume',
+                        ),
+                        IconButton(
+                          onPressed: () async {
+                            await _audioPlayer.stop();
+                            setDialogState(() {});
+                          },
+                          icon: const Icon(Icons.stop),
+                          tooltip: 'Stop',
+                        ),
+                      ],
+                    ),
+                    
+                    // Progress bar
+                    if (_totalDuration > Duration.zero) ...[
+                      const SizedBox(height: 8),
+                      LinearProgressIndicator(
+                        value: _currentPosition.inMilliseconds / _totalDuration.inMilliseconds,
+                        backgroundColor: Colors.grey[300],
+                        valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF4A90E2)),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${_formatDuration(_currentPosition)} / ${_formatDuration(_totalDuration)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Close'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _playAudio(audioFile);
+                  },
+                  icon: Icon(_currentlyPlaying == audioFile && _isPlaying 
+                      ? Icons.pause 
+                      : Icons.play_arrow),
+                  label: Text(_currentlyPlaying == audioFile && _isPlaying 
+                      ? 'Pause' 
+                      : 'Play'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -178,6 +404,13 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
     return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
   }
 
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    return '$minutes:$seconds';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -191,15 +424,6 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
-          IconButton(
-            icon: Icon(_isGridView ? Icons.list : Icons.grid_view),
-            onPressed: () {
-              setState(() {
-                _isGridView = !_isGridView;
-              });
-            },
-            tooltip: _isGridView ? 'List View' : 'Grid View',
-          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadAudioFiles,
@@ -243,28 +467,142 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
         ],
       ),
                 )
-              : _isGridView
-                  ? _buildGridView()
-                  : _buildListView(),
+              : Column(
+                  children: [
+                    Expanded(
+                      child              : _buildListView(), // Always use list view
+                    ),
+                    
+                    // Global audio controls
+                    if (_currentlyPlaying != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, -2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            // Currently playing info
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF4A90E2),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(
+                                    Icons.music_note,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _currentlyPlaying!.name ?? 'Unknown Audio',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        _currentlyPlaying!.mood,
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed: () async {
+                                    if (_isPlaying) {
+                                      await _audioPlayer.pause();
+                                    } else {
+                                      await _audioPlayer.resume();
+                                    }
+                                  },
+                                  icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+                                  tooltip: _isPlaying ? 'Pause' : 'Play',
+                                ),
+                                IconButton(
+                                  onPressed: () async {
+                                    await _audioPlayer.stop();
+                                  },
+                                  icon: const Icon(Icons.stop),
+                                  tooltip: 'Stop',
+                                ),
+                              ],
+                            ),
+                            
+                            // Progress bar
+                            if (_totalDuration > Duration.zero) ...[
+                              const SizedBox(height: 8),
+                              LinearProgressIndicator(
+                                value: _currentPosition.inMilliseconds / _totalDuration.inMilliseconds,
+                                backgroundColor: Colors.grey[300],
+                                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF4A90E2)),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    _formatDuration(_currentPosition),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                  Text(
+                                    _formatDuration(_totalDuration),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
     );
   }
 
-  Widget _buildGridView() {
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.8,
-      ),
-      itemCount: _audioFiles.length,
-      itemBuilder: (context, index) {
-        final audioFile = _audioFiles[index];
-        return _buildAudioCard(audioFile);
-      },
-    );
-  }
+  // Widget _buildGridView() {
+  //   return GridView.builder(
+  //     padding: const EdgeInsets.all(16),
+  //     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+  //       crossAxisCount: 2,
+  //       crossAxisSpacing: 16,
+  //       mainAxisSpacing: 16,
+  //       childAspectRatio: 0.8,
+  //     ),
+  //     itemCount: _audioFiles.length,
+  //     itemBuilder: (context, index) {
+  //       final audioFile = _audioFiles[index];
+  //       return _buildAudioCard(audioFile);
+  //       },
+  //   );
+  // }
 
   Widget _buildListView() {
     return ListView.builder(
@@ -370,23 +708,59 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
                 const SizedBox(height: 8),
               ],
               
-              // Play button
+              // Play button with state
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () => _playAudio(audioFile),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4A90E2),
+                    backgroundColor: _currentlyPlaying == audioFile && _isPlaying 
+                        ? Colors.orange 
+                        : const Color(0xFF4A90E2),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
-            ),
-                  icon: const Icon(Icons.play_arrow, size: 16),
-                  label: const Text('Play'),
+                  ),
+                  icon: Icon(
+                    _currentlyPlaying == audioFile && _isPlaying 
+                        ? Icons.pause 
+                        : Icons.play_arrow, 
+                    size: 16
+                  ),
+                  label: Text(
+                    _currentlyPlaying == audioFile && _isPlaying 
+                        ? 'Pause' 
+                        : 'Play'
+                  ),
                 ),
-            ),
+              ),
+              
+              // Volume control for currently playing audio
+              if (_currentlyPlaying == audioFile) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(Icons.volume_down, size: 16, color: Colors.grey),
+                    Expanded(
+                      child: Slider(
+                        value: _volume,
+                        min: 0.0,
+                        max: 1.0,
+                        divisions: 5,
+                        onChanged: (value) {
+                          setState(() {
+                            _volume = value;
+                          });
+                          _audioPlayer.setVolume(value);
+                        },
+                      ),
+                    ),
+                    const Icon(Icons.volume_up, size: 16, color: Colors.grey),
+                  ],
+                ),
+              ],
           ],
           ),
         ),

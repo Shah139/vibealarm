@@ -47,7 +47,7 @@ class _EditAlarmScreenState extends State<EditAlarmScreen> {
     _selectedFrequency = widget.alarm.frequency;
     _messageController = TextEditingController(text: widget.alarm.message ?? '');
     _isActive = widget.alarm.isActive;
-    _generatedAudioName = widget.alarm.audio;
+    _generatedAudioName = widget.alarm.audioName;
     _audioGenerated = true;
   }
 
@@ -71,7 +71,7 @@ class _EditAlarmScreenState extends State<EditAlarmScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.delete, color: Colors.red),
+            icon: const Icon(Icons.delete, color: Colors.white),
             onPressed: _showDeleteConfirmation,
             tooltip: 'Delete Alarm',
           ),
@@ -496,6 +496,7 @@ class _EditAlarmScreenState extends State<EditAlarmScreen> {
       period: _selectedTime.hour < 12 ? 'AM' : 'PM',
       frequency: _selectedFrequency,
       audio: _generatedAudioName,
+      audioName: _generatedAudioName, // Use the same name for display
       isActive: _isActive,
       message: _messageController.text.trim(),
       mood: _selectedMood,

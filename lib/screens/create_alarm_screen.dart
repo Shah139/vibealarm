@@ -67,17 +67,10 @@ class _CreateAlarmScreenState extends State<CreateAlarmScreen> {
             // Mood Selection Section
             _buildSectionHeader('Choose Mood & Language', Icons.mood),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildMoodDropdown(),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildLanguageDropdown(),
-                ),
-              ],
-            ),
+            _buildMoodDropdown(),
+            const SizedBox(height: 16),
+            _buildLanguageDropdown(),
+            
             const SizedBox(height: 32),
 
             // Frequency Selector Section
@@ -687,7 +680,7 @@ class _CreateAlarmScreenState extends State<CreateAlarmScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Playing: ${_generatedAudio!.name}'),
+            content: Text('Playing: ${_generatedAudio!.name ?? 'Generated Audio'}'),
             duration: const Duration(seconds: 2),
                 ),
         );
@@ -850,6 +843,7 @@ class _CreateAlarmScreenState extends State<CreateAlarmScreen> {
         period: _selectedTime.hour < 12 ? 'AM' : 'PM',
         frequency: _selectedFrequency,
         audio: _generatedAudio!.localPath, // Use the local path of generated audio
+        audioName: _generatedAudio!.name ?? 'Generated Audio', // Use the generated audio name with fallback
         isActive: true,
         message: _messageController.text.trim(),
         mood: _selectedMood,
@@ -874,7 +868,7 @@ class _CreateAlarmScreenState extends State<CreateAlarmScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Audio: ${_generatedAudio!.name}',
+                    'Audio: ${_generatedAudio!.name ?? 'Generated Audio'}',
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF4A90E2),

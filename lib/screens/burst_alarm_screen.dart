@@ -621,6 +621,7 @@ class _BurstAlarmScreenState extends State<BurstAlarmScreen> {
         period: alarmHour < 12 ? 'AM' : 'PM',
         frequency: _selectedFrequency,
         audio: _selectedAudio,
+        audioName: _selectedAudio, // Use the selected audio name for pre-installed audios
         isActive: true,
         createdAt: DateTime.now(),
         isBurstAlarm: true,

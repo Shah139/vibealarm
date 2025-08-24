@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/voice_config.dart';
 import '../models/audio_file.dart';
 import 'database_helper.dart';
@@ -12,9 +13,36 @@ class TTSService {
   factory TTSService() => _instance;
   TTSService._internal();
 
-  // Google Cloud TTS API Configuration
-  static const String _apiKey = 'AIzaSyBNVyE6RqZryo9uJ4g3WUSkle3IIoyTRGI';
-  static const String _baseUrl = 'https://texttospeech.googleapis.com/v1/text:synthesize';
+  // Google Cloud TTS API Configuration - Now read from environment variables
+  String get _apiKey {
+    print('Attempting to read GOOGLE_TTS_API_KEY from environment...');
+    final apiKey = dotenv.env['GOOGLE_TTS_API_KEY'];
+    print('Raw API key value: ${apiKey != null ? '${apiKey.substring(0, 10)}...' : 'NULL'}');
+    
+    if (apiKey == null || apiKey.isEmpty) {
+      print('ERROR: GOOGLE_TTS_API_KEY not found or empty');
+      print('Available environment variables: ${dotenv.env.keys.toList()}');
+      throw Exception('GOOGLE_TTS_API_KEY not found in environment variables. Please check your .env file.');
+    }
+    
+    print('API key loaded successfully');
+    return apiKey;
+  }
+
+  String get _baseUrl {
+    print('Attempting to read GOOGLE_TTS_BASE_URL from environment...');
+    final baseUrl = dotenv.env['GOOGLE_TTS_BASE_URL'];
+    print('Base URL value: $baseUrl');
+    
+    if (baseUrl == null || baseUrl.isEmpty) {
+      print('ERROR: GOOGLE_TTS_BASE_URL not found or empty');
+      print('Available environment variables: ${dotenv.env.keys.toList()}');
+      throw Exception('GOOGLE_TTS_BASE_URL not found in environment variables. Please check your .env file.');
+    }
+    
+    print('Base URL loaded successfully');
+    return baseUrl;
+  }
   
   // Cache for generated audio to avoid duplicates
   final Map<String, String> _audioCache = {};

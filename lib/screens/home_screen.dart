@@ -47,6 +47,63 @@ class _HomeScreenState extends State<HomeScreen> {
     await _loadAlarms();
   }
 
+  Future<void> _fixAudioNames() async {
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 16),
+                Text('Fixing audio names...'),
+              ],
+            ),
+          );
+        },
+      );
+
+      // Fix the audio names
+      await AlarmService.populateAudioNamesForExistingAlarms();
+      
+      // Close loading dialog
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+
+      // Refresh alarms to show the updated names
+      await _loadAlarms();
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Audio names fixed successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      // Close loading dialog
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+
+      // Show error message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to fix audio names: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _editAlarm(Alarm alarm) async {
     await Navigator.push(
       context,
@@ -180,6 +237,11 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
             tooltip: 'Database Viewer',
+          ),
+          IconButton(
+            icon: const Icon(Icons.build),
+            onPressed: _fixAudioNames,
+            tooltip: 'Fix Audio Names',
           ),
         ],
       ),
@@ -352,7 +414,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 ),
                                                 const SizedBox(width: 16),
                                                 Text(
-                                                  alarm.audio,
+                                                  alarm.audioName,
                                                   style: TextStyle(
                                                     fontSize: 13,
                                                     color: Colors.grey[600],

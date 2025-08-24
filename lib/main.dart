@@ -1,9 +1,42 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'screens/home_screen.dart';
 import 'services/audio_player_service.dart';
+import 'dart:io'; // Added for Directory.current
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Load environment variables from .env file
+  try {
+    print('Attempting to load .env file...');
+    await dotenv.load(fileName: ".env");
+    print('Environment variables loaded successfully');
+    
+    // Debug: Check what was loaded
+    final apiKey = dotenv.env['GOOGLE_TTS_API_KEY'];
+    final baseUrl = dotenv.env['GOOGLE_TTS_BASE_URL'];
+    
+    print('Loaded GOOGLE_TTS_API_KEY: ${apiKey != null ? '${apiKey.substring(0, 10)}...' : 'NULL'}');
+    print('Loaded GOOGLE_TTS_BASE_URL: $baseUrl');
+    print('Total environment variables loaded: ${dotenv.env.length}');
+    
+  } catch (e) {
+    print('Warning: Could not load .env file: $e');
+    print('Make sure you have created a .env file with your API keys');
+    print('Current working directory: ${Directory.current.path}');
+    
+    // List files in current directory to help debug
+    try {
+      final files = Directory.current.listSync();
+      print('Files in current directory:');
+      for (final file in files) {
+        print('  ${file.path.split('/').last}');
+      }
+    } catch (listError) {
+      print('Could not list directory contents: $listError');
+    }
+  }
   
   // Initialize audio player service
   final audioPlayer = AudioPlayerService();

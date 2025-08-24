@@ -139,7 +139,7 @@ class _DatabaseViewerScreenState extends State<DatabaseViewerScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text('Frequency: ${alarm.frequency}'),
-                Text('Audio: ${alarm.audio}'),
+                Text('Audio: ${alarm.audioName}'),
                 if (alarm.mood != null) Text('Mood: ${alarm.mood}'),
                 if (alarm.message != null) Text('Message: ${alarm.message}'),
                 Text('Created: ${alarm.createdAt.toString().substring(0, 16)}'),

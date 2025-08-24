@@ -19,13 +19,15 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'vibealarm.db');
     return await openDatabase(
       path,
-      version: 2,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
   }
 
   Future<void> _onCreate(Database db, int version) async {
+    print('Creating new database with version: $version');
+    
     // Main alarms table
     await db.execute('''
       CREATE TABLE alarms (
@@ -34,6 +36,7 @@ class DatabaseHelper {
         period TEXT NOT NULL,
         frequency TEXT NOT NULL,
         audio TEXT NOT NULL,
+        audioName TEXT NOT NULL,
         isActive INTEGER NOT NULL,
         message TEXT,
         mood TEXT,
@@ -44,6 +47,7 @@ class DatabaseHelper {
         lastTriggered TEXT
       )
     ''');
+    print('Created alarms table with audioName column');
 
     // Burst alarm groups table for managing burst alarm relationships
     await db.execute('''
@@ -58,6 +62,7 @@ class DatabaseHelper {
         isActive INTEGER NOT NULL
       )
     ''');
+    print('Created burst_alarm_groups table');
 
     // Alarm history table for tracking when alarms were triggered
     await db.execute('''
@@ -70,6 +75,7 @@ class DatabaseHelper {
         FOREIGN KEY (alarmId) REFERENCES alarms (id) ON DELETE CASCADE
       )
     ''');
+    print('Created alarm_history table');
 
     // Audio table for AI-generated and custom audio files (enhanced)
     await db.execute('''
@@ -89,6 +95,7 @@ class DatabaseHelper {
         isGenerated INTEGER NOT NULL DEFAULT 1
       )
     ''');
+    print('Created audio table');
 
     // Audio library table for managing pre-installed audio files
     await db.execute('''
@@ -102,6 +109,7 @@ class DatabaseHelper {
         createdAt TEXT NOT NULL
       )
     ''');
+    print('Created audio_library table');
 
     // Create indexes for better performance
     await db.execute('CREATE INDEX idx_alarms_time ON alarms(time)');
@@ -110,11 +118,17 @@ class DatabaseHelper {
     await db.execute('CREATE INDEX idx_burst_groups_active ON burst_alarm_groups(isActive)');
     await db.execute('CREATE INDEX idx_audio_mood ON audio(mood)');
     await db.execute('CREATE INDEX idx_audio_language ON audio(languageCode)');
+    print('Created all indexes');
+    
+    print('Database creation completed successfully');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    print('Database upgrade: $oldVersion -> $newVersion');
+    
     // Handle database schema upgrades here
     if (oldVersion < 2) {
+      print('Upgrading to version 2: Adding audio table columns...');
       // Add new columns to audio table for enhanced TTS support
       try {
         await db.execute('ALTER TABLE audio ADD COLUMN voiceName TEXT');
@@ -128,9 +142,126 @@ class DatabaseHelper {
         // Create new indexes
         await db.execute('CREATE INDEX idx_audio_mood ON audio(mood)');
         await db.execute('CREATE INDEX idx_audio_language ON audio(languageCode)');
+        print('Version 2 upgrade completed successfully');
       } catch (e) {
         print('Database upgrade error: $e');
       }
+    }
+    
+    if (oldVersion < 3) {
+      print('Upgrading to version 3: Adding audioName column...');
+      // Add audioName column to alarms table
+      try {
+        await db.execute('ALTER TABLE alarms ADD COLUMN audioName TEXT');
+        print('Version 3 upgrade completed successfully');
+      } catch (e) {
+        print('Database upgrade error adding audioName: $e');
+      }
+    }
+    
+    if (oldVersion < 4) {
+      print('Upgrading to version 4: Populating audioName for existing alarms...');
+      // Populate audioName for existing alarms (this will run for both new and existing databases)
+      try {
+        await _populateAudioNamesForExistingAlarms(db);
+        print('Version 4 upgrade completed successfully');
+      } catch (e) {
+        print('Database upgrade error populating audioName: $e');
+      }
+    }
+  }
+
+  /// Populate audioName field for existing alarms by mapping audio paths to names
+  Future<void> _populateAudioNamesForExistingAlarms(Database db) async {
+    try {
+      print('Starting audioName population for existing alarms...');
+      
+      // Get all existing alarms that don't have audioName set
+      final alarmsWithoutName = await db.query(
+        'alarms',
+        where: 'audioName IS NULL OR audioName = ?',
+        whereArgs: ['Unknown Audio'],
+      );
+
+      print('Found ${alarmsWithoutName.length} alarms without audioName');
+
+      if (alarmsWithoutName.isEmpty) {
+        print('No alarms need audioName population');
+        return;
+      }
+
+      // Also check all alarms to see their current state
+      final allAlarms = await db.query('alarms');
+      print('Total alarms in database: ${allAlarms.length}');
+      for (final alarm in allAlarms) {
+        print('Alarm ${alarm['id']}: audio="${alarm['audio']}", audioName="${alarm['audioName']}"');
+      }
+
+      for (final alarm in alarmsWithoutName) {
+        final audioPath = alarm['audio'] as String;
+        String? audioName;
+        
+        print('Processing alarm ${alarm['id']} with audio path: $audioPath');
+
+        // Try to find the audio name from the audio table (AI-generated)
+        final audioResult = await db.query(
+          'audio',
+          where: 'localPath = ?',
+          whereArgs: [audioPath],
+        );
+
+        print('Found ${audioResult.length} audio records for path: $audioPath');
+        if (audioResult.isNotEmpty) {
+          audioName = audioResult.first['name'] as String?;
+          print('Audio name from audio table: $audioName');
+        }
+
+        // If not found in audio table, try audio_library table (pre-installed)
+        if (audioName == null) {
+          final libraryResult = await db.query(
+            'audio_library',
+            where: 'filePath = ?',
+            whereArgs: [audioPath],
+          );
+
+          print('Found ${libraryResult.length} library records for path: $audioPath');
+          if (libraryResult.isNotEmpty) {
+            audioName = libraryResult.first['name'] as String?;
+            print('Audio name from library table: $audioName');
+          }
+        }
+
+        // If still not found, try to extract name from path or use a default
+        if (audioName == null) {
+          // Try to extract name from path
+          final pathParts = audioPath.split('/');
+          final fileName = pathParts.last;
+          if (fileName.isNotEmpty && fileName != audioPath) {
+            audioName = fileName.replaceAll('.mp3', '').replaceAll('.wav', '');
+            print('Extracted audio name from path: $audioName');
+          } else {
+            // Use mood or default name
+            final mood = alarm['mood'] as String?;
+            audioName = mood != null ? '$mood Audio' : 'Custom Audio';
+            print('Using fallback audio name: $audioName');
+          }
+        }
+
+        // Update the alarm with the found audio name
+        if (audioName != null) {
+          await db.update(
+            'alarms',
+            {'audioName': audioName},
+            where: 'id = ?',
+            whereArgs: [alarm['id']],
+          );
+          print('Updated alarm ${alarm['id']} with audioName: $audioName');
+        }
+      }
+
+      print('Finished populating audioName for existing alarms');
+    } catch (e) {
+      print('Error populating audioName for existing alarms: $e');
     }
   }
 
@@ -362,6 +493,7 @@ class DatabaseHelper {
       'period': alarm.period,
       'frequency': alarm.frequency,
       'audio': alarm.audio,
+      'audioName': alarm.audioName, // Added audioName field
       'isActive': alarm.isActive ? 1 : 0,
       'message': alarm.message,
       'mood': alarm.mood,
@@ -380,12 +512,13 @@ class DatabaseHelper {
       period: map['period'],
       frequency: map['frequency'],
       audio: map['audio'],
+      audioName: map['audioName'] ?? 'Unknown Audio', // Added audioName field with fallback
       isActive: map['isActive'] == 1,
       message: map['message'],
       mood: map['mood'],
       createdAt: DateTime.parse(map['createdAt']),
       isBurstAlarm: map['isBurstAlarm'] == 1,
-      burstAlarmTimes: null, // Can be populated from burst_alarm_groups table
+      burstAlarmTimes: null, // Can be populated from burst_alarms table
     );
   }
 
@@ -393,5 +526,11 @@ class DatabaseHelper {
   Future<void> close() async {
     final db = await database;
     await db.close();
+  }
+
+  /// Manually populate audioName for existing alarms (useful for debugging or manual fixes)
+  Future<void> populateAudioNamesForExistingAlarms() async {
+    final db = await database;
+    await _populateAudioNamesForExistingAlarms(db);
   }
 } 

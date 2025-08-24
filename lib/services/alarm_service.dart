@@ -34,6 +34,11 @@ class AlarmService {
     await _dbHelper.toggleAlarm(alarmId);
   }
 
+  /// Populate audio names for existing alarms (fixes "Unknown Audio" issue)
+  static Future<void> populateAudioNamesForExistingAlarms() async {
+    await _dbHelper.populateAudioNamesForExistingAlarms();
+  }
+
   // Generate unique ID for new alarms
   static String generateId() {
     return DateTime.now().millisecondsSinceEpoch.toString();
