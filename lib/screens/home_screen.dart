@@ -6,6 +6,7 @@ import 'edit_alarm_screen.dart';
 import 'database_viewer_screen.dart';
 import '../models/alarm.dart';
 import '../services/alarm_service.dart';
+import '../services/alarm_scheduler_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -243,6 +244,12 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: _fixAudioNames,
             tooltip: 'Fix Audio Names',
           ),
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            onPressed: _showTestingOptions,
+            tooltip: 'Testing Options',
+          ),
+          
         ],
       ),
       body: Padding(
@@ -566,6 +573,480 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _testAlarm() async {
+    try {
+      // Create a test alarm for 1 minute from now
+      final now = DateTime.now();
+      final testTime = now.add(const Duration(minutes: 1));
+      
+      print('=== CREATING TEST ALARM ===');
+      print('Current time: $now');
+      print('Test time: $testTime');
+      print('Test hour: ${testTime.hour}, minute: ${testTime.minute}');
+      
+      final testAlarm = Alarm(
+        id: 'test_${DateTime.now().millisecondsSinceEpoch}',
+        time: '${testTime.hour.toString().padLeft(2, '0')}:${testTime.minute.toString().padLeft(2, '0')}',
+        period: testTime.hour < 12 ? 'AM' : 'PM',
+        frequency: 'Once',
+        audio: '', // Empty audio will use default fire_alarm.mp3
+        audioName: 'Fire Alarm (Default)',
+        isActive: true,
+        message: 'This is a test alarm to verify functionality',
+        mood: 'Test',
+        createdAt: now,
+        isBurstAlarm: false,
+        isScheduled: false,
+      );
+
+      print('Test alarm created:');
+      print('  Time: ${testAlarm.time}');
+      print('  Period: ${testAlarm.period}');
+      print('  Frequency: ${testAlarm.frequency}');
+
+      // Schedule the test alarm
+      final success = await AlarmService.scheduleAlarm(testAlarm);
+      
+      if (success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Test alarm scheduled for ${testTime.hour}:${testTime.minute.toString().padLeft(2, '0')}'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to schedule test alarm'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Error in _testAlarm: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error creating test alarm: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _debugTimers() async {
+    try {
+      // Get the scheduler service instance and debug timers
+      final schedulerService = AlarmSchedulerService();
+      schedulerService.debugActiveTimers();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Check console for timer debug info'),
+            backgroundColor: Colors.blue,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Debug error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _manualTrigger() async {
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 16),
+                Text('Triggering alarm...'),
+              ],
+            ),
+          );
+        },
+      );
+
+      // Create a test alarm
+      final testAlarm = Alarm(
+        id: 'manual_test_${DateTime.now().millisecondsSinceEpoch}',
+        time: '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+        period: DateTime.now().hour < 12 ? 'AM' : 'PM',
+        frequency: 'Once',
+        audio: '', // Empty audio will use default fire_alarm.mp3
+        audioName: 'Fire Alarm (Default)',
+        isActive: true,
+        message: 'This is a manual test alarm trigger',
+        mood: 'Test',
+        createdAt: DateTime.now(),
+        isBurstAlarm: false,
+        isScheduled: false,
+      );
+
+      // Trigger the test alarm immediately
+      final schedulerService = AlarmSchedulerService();
+      await schedulerService.triggerAlarmImmediately(testAlarm);
+      
+      // Close loading dialog
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Test alarm triggered successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog on error
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error triggering alarm: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _testTimeCalculation() async {
+    try {
+      final now = DateTime.now();
+      final testTime = now.add(const Duration(minutes: 1));
+      
+      print('=== TESTING TIME CALCULATION ===');
+      print('Current time: $now');
+      print('Test time: $testTime');
+      print('Test hour: $testTime.hour, minute: $testTime.minute');
+      
+      // Create a test alarm to see the calculation
+      final testAlarm = Alarm(
+        id: 'time_test_${DateTime.now().millisecondsSinceEpoch}',
+        time: '${testTime.hour.toString().padLeft(2, '0')}:${testTime.minute.toString().padLeft(2, '0')}',
+        period: testTime.hour < 12 ? 'AM' : 'PM',
+        frequency: 'Once',
+        audio: '',
+        audioName: 'Time Test',
+        isActive: true,
+        message: 'Testing time calculation',
+        mood: 'Test',
+        createdAt: now,
+        isBurstAlarm: false,
+        isScheduled: false,
+      );
+
+      print('Test alarm created:');
+      print('  Time: ${testAlarm.time}');
+      print('  Period: ${testAlarm.period}');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Check console for time calculation details'),
+            backgroundColor: Colors.blue,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error in _testTimeCalculation: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _testFullScreenAlarm() async {
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 16),
+                Text('Triggering full screen alarm...'),
+              ],
+            ),
+          );
+        },
+      );
+
+      // Create a test alarm
+      final testAlarm = Alarm(
+        id: 'full_screen_test_${DateTime.now().millisecondsSinceEpoch}',
+        time: '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+        period: DateTime.now().hour < 12 ? 'AM' : 'PM',
+        frequency: 'Once',
+        audio: '', // Empty audio will use default fire_alarm.mp3
+        audioName: 'Fire Alarm (Default)',
+        isActive: true,
+        message: 'This is a full screen alarm test',
+        mood: 'Test',
+        createdAt: DateTime.now(),
+        isBurstAlarm: false,
+        isScheduled: false,
+      );
+
+      // Trigger the full screen alarm
+      final schedulerService = AlarmSchedulerService();
+      await schedulerService.triggerFullScreenAlarm(testAlarm);
+      
+      // Close loading dialog
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Full screen alarm triggered successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog on error
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error triggering full screen alarm: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _testCallback() async {
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 16),
+                Text('Testing callback...'),
+              ],
+            ),
+          );
+        },
+      );
+
+      // Create a test alarm
+      final testAlarm = Alarm(
+        id: 'callback_test_${DateTime.now().millisecondsSinceEpoch}',
+        time: '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+        period: DateTime.now().hour < 12 ? 'AM' : 'PM',
+        frequency: 'Once',
+        audio: '', // Empty audio will use default fire_alarm.mp3
+        audioName: 'Fire Alarm (Default)',
+        isActive: true,
+        message: 'This is a test callback alarm',
+        mood: 'Test',
+        createdAt: DateTime.now(),
+        isBurstAlarm: false,
+        isScheduled: false,
+      );
+
+      // Schedule the test alarm
+      final success = await AlarmService.scheduleAlarm(testAlarm);
+      
+      if (success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Test callback alarm scheduled for ${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to schedule test callback alarm'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog on error
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error in _testCallback: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _stopAllAlarms() async {
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 16),
+                Text('Stopping all alarms...'),
+              ],
+            ),
+          );
+        },
+      );
+
+      // Stop all active alarms
+      final schedulerService = AlarmSchedulerService();
+      await schedulerService.stopAllActiveAlarms();
+      
+      // Close loading dialog
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('All active alarms stopped.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog on error
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error stopping alarms: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showTestingOptions() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Testing Options'),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                _buildActionButton(
+                  icon: Icons.alarm,
+                  title: 'Test Single Alarm',
+                  subtitle: 'Schedule a test alarm for 1 minute from now',
+                  onTap: _testAlarm,
+                ),
+                const SizedBox(height: 16),
+                _buildActionButton(
+                  icon: Icons.bug_report,
+                  title: 'Debug Timers',
+                  subtitle: 'View active timers in the scheduler',
+                  onTap: _debugTimers,
+                ),
+                const SizedBox(height: 16),
+                _buildActionButton(
+                  icon: Icons.play_arrow,
+                  title: 'Manual Trigger',
+                  subtitle: 'Trigger a test alarm immediately',
+                  onTap: _manualTrigger,
+                ),
+                const SizedBox(height: 16),
+                _buildActionButton(
+                  icon: Icons.schedule,
+                  title: 'Test Time Calculation',
+                  subtitle: 'Verify time calculation logic',
+                  onTap: _testTimeCalculation,
+                ),
+                const SizedBox(height: 16),
+                _buildActionButton(
+                  icon: Icons.bug_report,
+                  title: 'Test Full Screen Alarm',
+                  subtitle: 'Trigger a full screen alarm',
+                  onTap: _testFullScreenAlarm,
+                ),
+                const SizedBox(height: 16),
+                _buildActionButton(
+                  icon: Icons.phone_callback,
+                  title: 'Test Callback',
+                  subtitle: 'Test if alarm callback is working',
+                  onTap: _testCallback,
+                ),
+                const SizedBox(height: 16),
+                _buildActionButton(
+                  icon: Icons.stop,
+                  title: 'Stop All Alarms',
+                  subtitle: 'Stop all currently active alarms',
+                  onTap: _stopAllAlarms,
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
     );
   }
 } 

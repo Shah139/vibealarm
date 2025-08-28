@@ -256,22 +256,22 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
       builder: (BuildContext context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
-              title: Text(audioFile.name ?? 'Audio Details'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildDetailRow('Text', audioFile.text ?? 'N/A'),
-                  _buildDetailRow('Mood', audioFile.mood),
-                  _buildDetailRow('Voice', audioFile.voiceName ?? 'Default'),
-                  _buildDetailRow('Language', audioFile.languageCode ?? 'en-US'),
-                  if (audioFile.duration != null)
-                    _buildDetailRow('Duration', '${audioFile.duration}s'),
-                  if (audioFile.fileSize != null)
-                    _buildDetailRow('File Size', audioFile.fileSize!),
-                  _buildDetailRow('Created', _formatDate(audioFile.createdAt)),
-                  _buildDetailRow('Type', audioFile.isGenerated ? 'Generated' : 'Pre-installed'),
+        return AlertDialog(
+          title: Text(audioFile.name ?? 'Audio Details'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildDetailRow('Text', audioFile.text ?? 'N/A'),
+              _buildDetailRow('Mood', audioFile.mood),
+              _buildDetailRow('Voice', audioFile.voiceName ?? 'Default'),
+              _buildDetailRow('Language', audioFile.languageCode ?? 'en-US'),
+              if (audioFile.duration != null)
+                _buildDetailRow('Duration', '${audioFile.duration}s'),
+              if (audioFile.fileSize != null)
+                _buildDetailRow('File Size', audioFile.fileSize!),
+              _buildDetailRow('Created', _formatDate(audioFile.createdAt)),
+              _buildDetailRow('Type', audioFile.isGenerated ? 'Generated' : 'Pre-installed'),
                   
                   const SizedBox(height: 16),
                   
@@ -346,26 +346,26 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
                       ),
                     ],
                   ],
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Close'),
-                ),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    _playAudio(audioFile);
-                  },
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _playAudio(audioFile);
+              },
                   icon: Icon(_currentlyPlaying == audioFile && _isPlaying 
                       ? Icons.pause 
                       : Icons.play_arrow),
                   label: Text(_currentlyPlaying == audioFile && _isPlaying 
                       ? 'Pause' 
                       : 'Play'),
-                ),
-              ],
+            ),
+          ],
             );
           },
         );
@@ -476,7 +476,7 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
                     // Global audio controls
                     if (_currentlyPlaying != null) ...[
                       Container(
-                        padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           boxShadow: [
@@ -722,7 +722,7 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
-                  ),
+            ),
                   icon: Icon(
                     _currentlyPlaying == audioFile && _isPlaying 
                         ? Icons.pause 
@@ -755,8 +755,8 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
                           });
                           _audioPlayer.setVolume(value);
                         },
-                      ),
-                    ),
+                ),
+            ),
                     const Icon(Icons.volume_up, size: 16, color: Colors.grey),
                   ],
                 ),

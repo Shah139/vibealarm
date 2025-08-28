@@ -206,19 +206,34 @@ class AudioPlayerService {
   /// Preview audio file (play for a few seconds)
   Future<void> previewAudio(AudioFile audioFile, {Duration previewDuration = const Duration(seconds: 5)}) async {
     try {
+      print('Previewing audio: ${audioFile.localPath}');
+      
+      // Check if file exists
+      final file = File(audioFile.localPath);
+      if (!await file.exists()) {
+        throw Exception('Audio file not found: ${audioFile.localPath}');
+      }
+      
+      // Stop current playback if any
+      await stop();
+      
       // Load audio
       await _player.setFilePath(audioFile.localPath);
       
       // Start playing
       await _player.play();
       
+      print('Audio preview started successfully');
+      
       // Stop after preview duration
       Future.delayed(previewDuration, () {
         if (_player.playing) {
           _player.pause();
+          print('Audio preview stopped after $previewDuration');
         }
       });
     } catch (e) {
+      print('Error in previewAudio: $e');
       throw Exception('Failed to preview audio: $e');
     }
   }

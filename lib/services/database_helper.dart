@@ -19,7 +19,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'vibealarm.db');
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -44,10 +44,12 @@ class DatabaseHelper {
         isBurstAlarm INTEGER NOT NULL,
         burstAlarmGroupId TEXT,
         nextAlarmTime TEXT,
-        lastTriggered TEXT
+        lastTriggered TEXT,
+        nextTriggerTime TEXT,
+        isScheduled INTEGER NOT NULL DEFAULT 0
       )
     ''');
-    print('Created alarms table with audioName column');
+    print('Created alarms table with scheduling fields');
 
     // Burst alarm groups table for managing burst alarm relationships
     await db.execute('''
@@ -167,6 +169,18 @@ class DatabaseHelper {
         print('Version 4 upgrade completed successfully');
       } catch (e) {
         print('Database upgrade error populating audioName: $e');
+      }
+    }
+    
+    if (oldVersion < 5) {
+      print('Upgrading to version 5: Adding alarm scheduling fields...');
+      // Add new fields for alarm scheduling
+      try {
+        await db.execute('ALTER TABLE alarms ADD COLUMN nextTriggerTime TEXT');
+        await db.execute('ALTER TABLE alarms ADD COLUMN isScheduled INTEGER NOT NULL DEFAULT 0');
+        print('Version 5 upgrade completed successfully');
+      } catch (e) {
+        print('Database upgrade error adding scheduling fields: $e');
       }
     }
   }
@@ -501,7 +515,9 @@ class DatabaseHelper {
       'isBurstAlarm': alarm.isBurstAlarm ? 1 : 0,
       'burstAlarmGroupId': null, // Can be used for future burst alarm grouping
       'nextAlarmTime': null, // Can be used for scheduling
-      'lastTriggered': null, // Can be used for tracking
+      'lastTriggered': alarm.lastTriggered?.toIso8601String(),
+      'nextTriggerTime': alarm.nextTriggerTime?.toIso8601String(),
+      'isScheduled': alarm.isScheduled ? 1 : 0,
     };
   }
 
@@ -519,6 +535,13 @@ class DatabaseHelper {
       createdAt: DateTime.parse(map['createdAt']),
       isBurstAlarm: map['isBurstAlarm'] == 1,
       burstAlarmTimes: null, // Can be populated from burst_alarms table
+      nextTriggerTime: map['nextTriggerTime'] != null 
+          ? DateTime.parse(map['nextTriggerTime'])
+          : null,
+      lastTriggered: map['lastTriggered'] != null 
+          ? DateTime.parse(map['lastTriggered'])
+          : null,
+      isScheduled: map['isScheduled'] == 1,
     );
   }
 

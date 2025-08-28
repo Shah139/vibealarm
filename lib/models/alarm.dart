@@ -11,6 +11,11 @@ class Alarm {
   final DateTime createdAt;
   final bool isBurstAlarm;
   final List<String>? burstAlarmTimes;
+  
+  // New fields for alarm scheduling
+  final DateTime? nextTriggerTime;
+  final DateTime? lastTriggered;
+  final bool isScheduled;
 
   Alarm({
     required this.id,
@@ -25,6 +30,9 @@ class Alarm {
     required this.createdAt,
     this.isBurstAlarm = false,
     this.burstAlarmTimes,
+    this.nextTriggerTime,
+    this.lastTriggered,
+    this.isScheduled = false,
   });
 
   Map<String, dynamic> toJson() {
@@ -41,6 +49,9 @@ class Alarm {
       'createdAt': createdAt.toIso8601String(),
       'isBurstAlarm': isBurstAlarm,
       'burstAlarmTimes': burstAlarmTimes,
+      'nextTriggerTime': nextTriggerTime?.toIso8601String(),
+      'lastTriggered': lastTriggered?.toIso8601String(),
+      'isScheduled': isScheduled ? 1 : 0,
     };
   }
 
@@ -60,6 +71,13 @@ class Alarm {
       burstAlarmTimes: json['burstAlarmTimes'] != null 
           ? List<String>.from(json['burstAlarmTimes'])
           : null,
+      nextTriggerTime: json['nextTriggerTime'] != null 
+          ? DateTime.parse(json['nextTriggerTime'])
+          : null,
+      lastTriggered: json['lastTriggered'] != null 
+          ? DateTime.parse(json['lastTriggered'])
+          : null,
+      isScheduled: json['isScheduled'] == 1,
     );
   }
 
@@ -76,6 +94,9 @@ class Alarm {
     DateTime? createdAt,
     bool? isBurstAlarm,
     List<String>? burstAlarmTimes,
+    DateTime? nextTriggerTime,
+    DateTime? lastTriggered,
+    bool? isScheduled,
   }) {
     return Alarm(
       id: id ?? this.id,
@@ -90,6 +111,9 @@ class Alarm {
       createdAt: createdAt ?? this.createdAt,
       isBurstAlarm: isBurstAlarm ?? this.isBurstAlarm,
       burstAlarmTimes: burstAlarmTimes ?? this.burstAlarmTimes,
+      nextTriggerTime: nextTriggerTime ?? this.nextTriggerTime,
+      lastTriggered: lastTriggered ?? this.lastTriggered,
+      isScheduled: isScheduled ?? this.isScheduled,
     );
   }
 } 
